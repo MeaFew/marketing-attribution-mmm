@@ -68,7 +68,6 @@ def create_derived_features(df: pl.DataFrame) -> pl.DataFrame:
     """Create total spend, CTR, CPM, and other derived metrics."""
     available_spend = [c for c in SPEND_CHANNELS if c in df.columns]
     available_clicks = [c for c in CLICK_CHANNELS if c in df.columns]
-    available_impressions = [c for c in IMPRESSION_CHANNELS if c in df.columns]
 
     # Total spend
     df = df.with_columns(
