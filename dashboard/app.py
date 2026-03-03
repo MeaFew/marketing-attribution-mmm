@@ -210,5 +210,6 @@ if page == "Budget Simulator":
         current_pred = result["current_revenue"]
         st.metric("Predicted Revenue", f"${predicted:,.0f}",
                   delta=f"{(predicted - current_pred) / abs(current_pred) * 100:.1f}%" if current_pred != 0 else "N/A")
-    except Exception:
+    except (FileNotFoundError, KeyError, TypeError) as e:
+        st.warning(f"Failed to load MMM results: {e}")
         st.info("Load MMM results for revenue prediction.")

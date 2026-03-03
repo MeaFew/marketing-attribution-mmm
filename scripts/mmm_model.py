@@ -70,8 +70,14 @@ def fit_ols(X: np.ndarray, y: np.ndarray, feature_names: list[str]) -> dict:
     for i, name in enumerate(["const"] + feature_names):
         if i == 0:
             continue
-        vif = variance_inflation_factor(X_const, i)
-        vif_data.append({"feature": name, "vif": round(float(vif), 2)})
+        try:
+            vif = variance_inflation_factor(X_const, i)
+            if np.isnan(vif) or np.isinf(vif):
+                vif_data.append({"feature": name, "vif": None, "note": "Cannot compute (zero variance)"})
+            else:
+                vif_data.append({"feature": name, "vif": round(float(vif), 2)})
+        except Exception:
+            vif_data.append({"feature": name, "vif": None, "note": "Cannot compute (zero variance)"})
 
     # Durbin-Watson
     dw = durbin_watson(model.resid)
@@ -107,6 +113,9 @@ def fit_ridge(X: np.ndarray, y: np.ndarray, feature_names: list[str], alpha: flo
     model.fit(X_scaled, y)
 
     y_pred = model.predict(X_scaled)
+    r2 = r2_score(y, y_pred)
+    n = len(y)
+    p = X.shape[1]
 
     # Convert scaled coefs back to original scale
     coefs_original = model.coef_ / scaler.scale_
@@ -118,7 +127,8 @@ def fit_ridge(X: np.ndarray, y: np.ndarray, feature_names: list[str], alpha: flo
 
     return {
         "model": f"Ridge(alpha={alpha})",
-        "r2": round(float(r2_score(y, y_pred)), 4),
+        "r2": round(float(r2), 4),
+        "adj_r2": round(float(1 - (1 - r2) * (n - 1) / (n - p - 1)), 4),
         "mae": round(float(mean_absolute_error(y, y_pred)), 2),
         "coefficients": coefs,
         "intercept": round(float(intercept_original), 2),
@@ -134,6 +144,9 @@ def fit_lasso(X: np.ndarray, y: np.ndarray, feature_names: list[str], alpha: flo
     model.fit(X_scaled, y)
 
     y_pred = model.predict(X_scaled)
+    r2 = r2_score(y, y_pred)
+    n = len(y)
+    p = X.shape[1]
 
     coefs_original = model.coef_ / scaler.scale_
     intercept_original = model.intercept_ - np.sum(model.coef_ * scaler.mean_ / scaler.scale_)
@@ -144,7 +157,8 @@ def fit_lasso(X: np.ndarray, y: np.ndarray, feature_names: list[str], alpha: flo
 
     return {
         "model": f"Lasso(alpha={alpha})",
-        "r2": round(float(r2_score(y, y_pred)), 4),
+        "r2": round(float(r2), 4),
+        "adj_r2": round(float(1 - (1 - r2) * (n - 1) / (n - p - 1)), 4),
         "mae": round(float(mean_absolute_error(y, y_pred)), 2),
         "coefficients": coefs,
         "intercept": round(float(intercept_original), 2),

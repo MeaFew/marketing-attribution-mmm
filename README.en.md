@@ -23,7 +23,7 @@ This system is built on the figshare "Conjura Multi-Region MMM Dataset" (coverin
 Core business problems addressed:
 
 - **Channel ROI quantification**: When multiple channels run simultaneously, how do you isolate each channel's true contribution to conversions?
-- **Attribution model selection**: First-touch, Last-touch, Shapley Value, and Markov Chain yield vastly different conclusions — how do you systematically compare them?
+- **Attribution model selection**: First-touch, Last-touch, Shapley Value, and Removal Effect analysis yield vastly different conclusions — how do you systematically compare them?
 - **Budget allocation by intuition**: Under a fixed total budget, how do you scientifically reallocate channel spend to maximize revenue?
 
 ---
@@ -47,7 +47,7 @@ flowchart LR
 | Data Cleaning | **Polars** | Vectorized execution + lazy evaluation; processes 132K rows in milliseconds |
 | Storage | **DuckDB** / Parquet | Zero-config OLAP, columnar compression, SQL analytics out of the box |
 | Macro Modeling | **statsmodels** + **scikit-learn** | OLS provides full statistical inference (p-values, confidence intervals); Ridge/Lasso handles channel collinearity |
-| Micro Attribution | 6 self-built models | Covers rule-based (First/Last/Linear/Time-decay) and game-theoretic (Shapley/Markov) approaches for head-to-head comparison |
+| Micro Attribution | 6 self-built models | Covers rule-based (First/Last/Linear/Time-decay) and game-theoretic (Shapley/Removal Effect) approaches for head-to-head comparison |
 | Budget Optimization | **scipy.optimize** SLSQP | Supports equality constraints (fixed total budget) and inequality constraints (per-channel floor); stable convergence |
 | Delivery | **Streamlit** + **Plotly** | Three-page interactive dashboard: MMM Overview / Attribution Comparison / Budget Simulator |
 
@@ -62,7 +62,7 @@ make setup        # Create venv + install dependencies
 make all          # Run full pipeline: clean → MMM → attribution → optimize
 make dashboard    # Launch Streamlit interactive dashboard
 make test         # Run pytest test suite
-make verify       # Local quality gates (lint + format + type-check)
+make verify       # Local quality gates (lint + format + test)
 ```
 
 ---
@@ -85,9 +85,9 @@ Key operations:
 
 | Model | R² | Adj. R² | Best Regularization |
 |-------|-----|---------|---------------------|
-| OLS | 0.569 | 0.52 | — |
-| **Ridge** | 0.569 | 0.52 | α = 1.0 |
-| Lasso | 0.569 | 0.52 | α = 0.1 |
+| OLS | 0.569 | 0.563 | — |
+| **Ridge** | 0.569 | 0.563 | α = 1.0 |
+| Lasso | 0.569 | 0.563 | α = 0.1 |
 
 > R² ≈ 0.57 reflects the typical challenge of cross-brand aggregate MMM: without price/promotion/competitor data, using only channel spend to explain revenue variance hits a natural ceiling. Brand-level MMM with richer features can achieve 0.70–0.85.
 
@@ -111,8 +111,8 @@ Based on real channel structure (Google 5 sub-channels, Meta 3 sub-channels, Tik
 **Key Findings:**
 
 - **Rule-based models (First/Last/Linear)** produce divergent conclusions. Last-touch systematically overweights final-touch channels (e.g., TikTok), while First-touch overweights acquisition channels.
-- **Shapley Value** raises Organic's attribution share from ~21% to **25.9%**, revealing that rule-based models severely underestimate the synergistic value of branded organic traffic — this is the core advantage of game-theoretic attribution: fair distribution of interaction effects across channels via weighted marginal contributions over all subsets.
-- **Markov Chain** removal effects align with Shapley trends but use a different numerical framework (Markov is state-transition-probability-based, Shapley is combinatorial-game-based), serving as mutual validation.
+- **Shapley Value** provides the most balanced allocation; Google PMax receives 10.0% under Shapley and 11.0% under Removal Effect — both higher than rule-based models, as game-theoretic attribution fairly distributes interaction effects through weighted marginal contributions over all subsets.
+- **Removal Effect** analysis shows trends that align with Shapley values but use a different numerical framework (removal effect is conversion-rate-drop-based, Shapley is combinatorial-game-based), serving as mutual validation.
 
 ### 4. Budget Optimization (`scripts/budget_optimizer.py`)
 
@@ -121,9 +121,9 @@ Using Ridge MMM coefficients as the response function, SLSQP solves for optimal 
 | Scenario | Total Budget | Predicted Revenue | Uplift |
 |----------|-------------|-------------------|--------|
 | Current Allocation (Baseline) | 100% | Baseline | — |
-| **Re-optimized Allocation** | 100% | **+132%** | Same total budget, reallocated proportions only |
-| Budget +10% + optimization | 110% | +156% | Incremental budget prioritized to high-ROI channels |
-| Budget +20% + optimization | 120% | +178% | Diminishing marginal returns begin to emerge |
+| **Re-optimized Allocation** | 100% | **+132.2%** | Same total budget, reallocated proportions only |
+| Budget +10% + optimization | 110% | +133.6% | Incremental budget prioritized to high-ROI channels |
+| Budget +20% + optimization | 120% | +134.9% | Diminishing marginal returns begin to emerge |
 
 > **Business Insight**: Without increasing total budget, data-driven reallocation alone can double revenue — especially critical for budget-constrained mid-size brands.
 

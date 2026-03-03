@@ -23,7 +23,7 @@
 核心解决的业务问题：
 
 - **渠道 ROI 量化困难**：多个渠道同时投放时，如何剥离各渠道对转化的真实贡献？
-- **归因模型选择无依据**：First-touch、Last-touch、Shapley Value、Markov Chain 等方法结论差异巨大，如何系统比较？
+- **归因模型选择无依据**：First-touch、Last-touch、Shapley Value、移除效应分析 (Removal Effect) 等方法结论差异巨大，如何系统比较？
 - **预算分配凭经验**：在总预算约束下，如何科学重新分配各渠道 spend 以最大化 revenue？
 
 ---
@@ -47,7 +47,7 @@ flowchart LR
 | 数据清洗 | **Polars** | 向量化执行 + 惰性求值，处理 132K 行毫秒级 |
 | 存储 | **DuckDB** / Parquet | 零配置 OLAP，列式压缩，SQL 分析开箱即用 |
 | 宏观建模 | **statsmodels** + **scikit-learn** | OLS 提供完整统计推断（p-value、置信区间）；Ridge/Lasso 处理渠道间共线性 |
-| 微观归因 | 自研 6 种模型 | 覆盖规则类（First/Last/Linear/Time-decay）与博弈论类（Shapley/Markov），便于横向对比 |
+| 微观归因 | 自研 6 种模型 | 覆盖规则类（First/Last/Linear/Time-decay）与博弈论类（Shapley/移除效应分析），便于横向对比 |
 | 预算优化 | **scipy.optimize** SLSQP | 支持等式约束（总预算不变）与不等式约束（单渠道下限），收敛稳定 |
 | 交付 | **Streamlit** + **Plotly** | 三页交互看板：MMM 概览 / 归因对比 / 预算模拟器 |
 
@@ -62,7 +62,7 @@ make setup        # 创建虚拟环境 + 安装依赖
 make all          # 运行完整管线：清洗 → MMM → 归因 → 优化
 make dashboard    # 启动 Streamlit 交互看板
 make test         # 运行 pytest 测试套件
-make verify       # 本地质量门（lint + format + type-check）
+make verify       # 本地质量门（lint + format + test）
 ```
 
 ---
@@ -92,9 +92,9 @@ make verify       # 本地质量门（lint + format + type-check）
 | **MMM 领域基准（Ridge）** | 0.70–0.85 | — | 品牌级、含完整促销/价格/竞争数据的 MMM（参考文献：Hanssens et al., *Market Response Models*, 2nd ed.） |
 | ** naive 均值预测** | ~0.0 | — | 用历史 revenue 均值作为预测 |
 | **单变量（最大渠道）** | ~0.35 | — | 仅用 spend 最高的单一渠道回归 |
-| **本项目 OLS** | 0.569 | 0.52 | 单品牌全渠道线性回归（auto-selected brand=5488b0） |
-| **本项目 Ridge** | 0.569 | 0.52 | L2 正则化（α=1.0） |
-| **本项目 Lasso** | 0.569 | 0.52 | L1 正则化（α=0.1） |
+| **本项目 OLS** | 0.569 | 0.563 | 单品牌全渠道线性回归（auto-selected brand=5488b0） |
+| **本项目 Ridge** | 0.569 | 0.563 | L2 正则化（α=1.0） |
+| **本项目 Lasso** | 0.569 | 0.563 | L1 正则化（α=0.1） |
 
 > R² ≈ 0.57 反映了跨品牌聚合层面 MMM 的典型挑战：无价格/促销/竞品数据时，仅用渠道 spend 解释 revenue 变异的天然上限。品牌级细分模型可达 0.70–0.85。
 
@@ -102,9 +102,9 @@ make verify       # 本地质量门（lint + format + type-check）
 
 | 模型 | R² | Adj. R² | 最优正则化参数 |
 |------|-----|---------|---------------|
-| OLS | 0.569 | 0.52 | — |
-| **Ridge** | 0.569 | 0.52 | α = 1.0 |
-| Lasso | 0.569 | 0.52 | α = 0.1 |
+| OLS | 0.569 | 0.563 | — |
+| **Ridge** | 0.569 | 0.563 | α = 1.0 |
+| Lasso | 0.569 | 0.563 | α = 0.1 |
 
 > Ridge/Lasso 在该数据上表现与 OLS 接近（spend 变量间共线性不高），正则化后系数更稳定。Durbin-Watson 统计量由模型自动输出，参见 `data/processed/models/mmm_results.json`。
 
@@ -127,7 +127,7 @@ make verify       # 本地质量门（lint + format + type-check）
 **关键发现：**
 
 - **规则类模型（First/Last/Linear）**结论差异大，Last-touch 系统性高估末触点渠道（如 TikTok），First-touch 高估获客型渠道。
-- **Shapley Value** 提供了最均衡的分配，Google PMax 在 Shapley 下获得 10.0%、Markov 下获得 11.0%，均高于规则类模型——博弈论归因通过所有子集的边际贡献加权，公平分配渠道间的交互效应。
+- **Shapley Value** 提供了最均衡的分配，Google PMax 在 Shapley 下获得 10.0%、移除效应分析下获得 11.0%，均高于规则类模型——博弈论归因通过所有子集的边际贡献加权，公平分配渠道间的交互效应。
 - **移除效应分析** 强调 Google Paid Search（19.4%）和 TikTok（9.7%），反映移除这些渠道时转化率下降最多——与 Shapley 趋势一致但数值体系不同，两者互为验证。
 
 ### 4. 预算优化（`scripts/budget_optimizer.py`）
@@ -137,9 +137,9 @@ make verify       # 本地质量门（lint + format + type-check）
 | 场景 | 总预算 | 预测 Revenue | 提升幅度 |
 |------|--------|-------------|---------|
 | 当前分配（Baseline） | 100% | 基准 | — |
-| **重新优化分配** | 100% | **+132%** | 不改变总预算，仅调整比例 |
-| 预算 +10% + 优化 | 110% | +156% | 增量预算优先投入高 ROI 渠道 |
-| 预算 +20% + 优化 | 120% | +178% | 边际收益递减效应开始显现 |
+| **重新优化分配** | 100% | **+132.2%** | 不改变总预算，仅调整比例 |
+| 预算 +10% + 优化 | 110% | +133.6% | 增量预算优先投入高 ROI 渠道 |
+| 预算 +20% + 优化 | 120% | +134.9% | 边际收益递减效应开始显现 |
 
 > **业务启示**：在不增加总预算的前提下，仅通过数据驱动的重新分配即可实现 revenue 翻倍——这对预算受限的中小型品牌尤为关键。
 

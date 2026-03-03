@@ -1,7 +1,6 @@
 # Data
 data/raw/*.csv
 data/raw/*.tsv
-data/processed/
 
 # Python
 __pycache__/
