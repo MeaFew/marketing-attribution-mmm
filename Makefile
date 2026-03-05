@@ -29,7 +29,7 @@ dashboard:
 test:
 	pytest tests/ -v
 
-verify:
+verify: lint format-check test audit
 	ruff check scripts/ dashboard/ --ignore E501,F401,E402
 	ruff format --check scripts/ dashboard/
 	pytest tests/ -v
@@ -41,3 +41,14 @@ clean:
 	rm -rf data/processed/*.duckdb
 	rm -rf reports/images/*.png
 	find . -type d -name "__pycache__" -exec rm -rf {} +
+
+# === Quality gates (extended) ===
+
+format:
+	ruff format scripts/ dashboard/
+
+format-check:
+	ruff format --check scripts/ dashboard/
+
+audit:
+	$(PYTHON) scripts/audit_consistency.py
