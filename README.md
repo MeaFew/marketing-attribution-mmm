@@ -58,11 +58,15 @@ flowchart LR
 ```bash
 git clone https://github.com/MeaFew/marketing-attribution-mmm.git
 cd marketing-attribution-mmm
+
+# 下载数据集（GitHub Releases，约 31MB）
+bash download_data.sh
+
+# 安装依赖并运行
 make setup        # 创建虚拟环境 + 安装依赖
 make all          # 运行完整管线：清洗 → MMM → 归因 → 优化
 make dashboard    # 启动 Streamlit 交互看板
-make test         # 运行 pytest 测试套件
-make verify       # 本地质量门（lint + format + test）
+make verify       # 本地质量门（lint + format + test + audit）
 ```
 
 ---

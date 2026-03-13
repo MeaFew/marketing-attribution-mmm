@@ -58,11 +58,15 @@ flowchart LR
 ```bash
 git clone https://github.com/MeaFew/marketing-attribution-mmm.git
 cd marketing-attribution-mmm
+
+# Download dataset (GitHub Releases, ~31MB)
+bash download_data.sh
+
+# Install and run
 make setup        # Create venv + install dependencies
 make all          # Run full pipeline: clean -> MMM -> attribution -> optimize
 make dashboard    # Launch Streamlit interactive dashboard
-make test         # Run pytest test suite
-make verify       # Local quality gates (lint + format + test)
+make verify       # Local quality gates (lint + format + test + audit)
 ```
 
 ---
