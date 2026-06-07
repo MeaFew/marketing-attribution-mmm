@@ -51,7 +51,6 @@ def optimize_budget(
     Bounds: min_spend_ratio * current <= spend <= max_spend_ratio * current
     """
     channels = list(current_spend.keys())
-    n = len(channels)
     current = np.array([current_spend[c] for c in channels])
     elastic = np.array([elasticities.get(c, 0.0) for c in channels])
 
@@ -141,7 +140,6 @@ def main() -> None:
 
     # Use average daily spend from the MMM training data as current spend baseline
     # In practice this would come from real budget data
-    sample_size = mmm.get("sample_size", 365)
     current_spend = {ch: 1000.0 for ch in SPEND_CHANNELS}  # placeholder
     # Override with realistic values if available
     for ch in SPEND_CHANNELS:
