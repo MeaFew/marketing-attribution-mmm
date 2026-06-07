@@ -31,6 +31,7 @@ test:
 
 verify:
 	ruff check scripts/ dashboard/ --ignore E501,F401,E402
+	ruff format --check scripts/ dashboard/
 	pytest tests/ -v
 
 all: preprocess mmm attribution optimize

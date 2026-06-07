@@ -87,7 +87,7 @@ Top 5 channels by coefficient magnitude:
 5. **Meta Instagram** — lower elasticity than Facebook
 
 **Diagnostics:**
-- Durbin-Watson statistic ~2.0 (no significant autocorrelation)
+- Durbin-Watson statistic = 0.78 (suggesting positive autocorrelation — consider adding lagged revenue as predictor)
 - Residuals approximately normal (Q-Q plot)
 - No severe multicollinearity (all VIF < 5)
 

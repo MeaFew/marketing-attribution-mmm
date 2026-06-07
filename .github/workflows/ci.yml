@@ -25,20 +25,57 @@ jobs:
         run: |
           ruff check scripts/ dashboard/ --ignore E501,F401,E402
 
-  # test job requires pre-generated data files (run: make all)
-  # Uncomment after running full pipeline locally and committing data/processed/
-  # test:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: "3.12"
-  #     - name: Install dependencies
-  #       run: pip install -r requirements.txt
-  #     - name: Run tests
-  #       run: pytest tests/ -v
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Generate mock data for tests
+        run: |
+          mkdir -p data/processed/models
+          python -c "
+          import json
+          data = {
+            'models': {
+              'ols': {
+                'coefficients': {'google_paid_search_adstock': {'coef': 13.87, 'pvalue': 0.01, 'significant': True}},
+                'r2': 0.569, 'adj_r2': 0.563, 'aic': 29000, 'bic': 29100,
+                'durbin_watson': 0.778, 'vif': [{'feature': 'tiktok_adstock', 'vif': None}],
+                'residuals': [0.0]
+              },
+              'ridge': {'coefficients': {'google_paid_search_adstock': {'coef': 13.92}}, 'r2': 0.569, 'adj_r2': 0.563, 'mae': 1e6, 'intercept': 1e6},
+              'lasso': {'coefficients': {'google_paid_search_adstock': {'coef': 13.87}}, 'r2': 0.569, 'adj_r2': 0.563, 'mae': 1e6, 'intercept': 1e6}
+            }
+          }
+          json.dump(data, open('data/processed/models/mmm_results.json', 'w'), indent=2)
+          "
+          python -c "
+          import json
+          ch = {'ch1': 33.3, 'ch2': 33.4, 'ch3': 33.3}
+          data = {
+            'first_touch': ch, 'last_touch': ch, 'linear': ch,
+            'time_decay': ch, 'shapley': ch, 'markov': ch
+          }
+          json.dump(data, open('data/processed/models/attribution_comparison.json', 'w'), indent=2)
+          "
+          python -c "
+          import json
+          data = {
+            'reallocate': {
+              'channels': ['ch1','ch2'], 'current_spend': {'ch1':100,'ch2':200},
+              'optimal_spend': {'ch1':150,'ch2':150}, 'current_revenue': 100,
+              'optimal_revenue': 120, 'improvement_pct': 20.0, 'total_budget': 300
+            }
+          }
+          json.dump(data, open('data/processed/models/budget_optimization.json', 'w'), indent=2)
+          "
+      - name: Run tests
+        run: pytest tests/ -v
 
   docker-build:
     runs-on: ubuntu-latest

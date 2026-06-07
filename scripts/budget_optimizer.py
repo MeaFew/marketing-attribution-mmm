@@ -86,8 +86,8 @@ def optimize_budget(
     )
 
     optimal = result.x
-    predicted_revenue_current = np.sum(elastic * current)
-    predicted_revenue_optimal = np.sum(elastic * optimal)
+    predicted_revenue_current = np.sum(elastic * np.log(np.maximum(current, 1e-6) + 1))
+    predicted_revenue_optimal = np.sum(elastic * np.log(np.maximum(optimal, 1e-6) + 1))
 
     return {
         "channels": channels,
@@ -140,15 +140,20 @@ def main() -> None:
     elasticities = extract_elasticities(mmm)
 
     # Use average daily spend from the MMM training data as current spend baseline
-    # In practice this would come from real budget data
-    current_spend = {ch: 1000.0 for ch in SPEND_CHANNELS}  # placeholder
-    # Override with realistic values if available
-    for ch in SPEND_CHANNELS:
-        key = ch.replace("_spend", "_adstock")
-        if key in elasticities:
-            # Use a reasonable baseline: inverse of elasticity as proxy for current investment
-            e = elasticities[ch]
-            current_spend[ch] = max(100, abs(5000 / (e + 1e-6)))
+    # Load cleaned data and compute actual average spend per channel
+    try:
+        from config import CLEANED_PARQUET_PATH
+        import polars as pl
+        df = pl.read_parquet(CLEANED_PARQUET_PATH)
+        current_spend = {}
+        for ch in SPEND_CHANNELS:
+            if ch in df.columns:
+                avg = df[ch].mean()
+                current_spend[ch] = float(avg) if avg is not None and avg > 0 else 1000.0
+            else:
+                current_spend[ch] = 1000.0
+    except Exception:
+        current_spend = {ch: 1000.0 for ch in SPEND_CHANNELS}  # fallback placeholder
 
     print("Running budget optimization...")
     scenarios = scenario_analysis(current_spend, elasticities)
