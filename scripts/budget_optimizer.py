@@ -58,9 +58,10 @@ def optimize_budget(
     if total_budget is None:
         total_budget = current.sum()
 
-    # Objective: negative revenue (minimize negative = maximize revenue)
+    # Objective: negative revenue with diminishing returns via log transform
+    # Revenue = elasticity * log(spend + 1) — captures saturation effect
     def objective(x):
-        return -np.sum(elastic * x)
+        return -np.sum(elastic * np.log(np.maximum(x, 1e-6) + 1))
 
     # Constraint: sum(x) = total_budget
     def budget_constraint(x):
