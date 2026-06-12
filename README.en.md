@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <h1 align="center">Marketing Attribution & Budget Optimization</h1>
   <p align="center">
     <b>A full-stack marketing effectiveness evaluation and budget optimization system — from macro MMM to micro multi-touch attribution</b>
@@ -35,7 +35,7 @@ flowchart LR
     A[Raw CSV<br/>132K rows x 50 cols] --> B[Polars ETL]
     B --> C[Parquet]
     C --> D[MMM Modeling<br/>OLS / Ridge / Lasso]
-    C --> E[User Journey<br/>Simulation 50K]
+    C --> E[User Journey<br/>Criteo 16.5M]
     E --> F[6 Attribution Models]
     D --> G[Budget Optimizer<br/>scipy SLSQP]
     F --> G
@@ -59,8 +59,13 @@ flowchart LR
 git clone https://github.com/MeaFew/marketing-attribution-mmm.git
 cd marketing-attribution-mmm
 
-# Download dataset (GitHub Releases, ~31MB)
+# 1. Download MMM dataset (GitHub Releases, ~31MB)
 bash download_data.sh
+
+# 2. (Optional but recommended) Download real attribution dataset
+#    Criteo Attribution Modeling for Bidding Dataset (~623MB)
+#    Place at data/raw/criteo_attribution_dataset.tsv.gz
+#    Official: https://ailab.criteo.com/criteo-attribution-modeling-bidding-dataset/
 
 # Install and run
 make setup        # Create venv + install dependencies
@@ -97,25 +102,30 @@ Key operations:
 
 ### 3. Multi-Touch Attribution (`scripts/multi_touch_attribution.py`)
 
-Based on real channel structure (Google 5 sub-channels, Meta 3 sub-channels, TikTok, Organic), 50,000 simulated user journeys are generated (3.5% conversion rate). Five attribution models plus removal effect analysis are compared:
+Uses the real **Criteo Attribution Modeling for Bidding Dataset** (30 days of live traffic, 16.5M impressions, 6.1M users, 45K conversions). Impression-level data is aggregated by `uid` into user journeys. The Top 10 campaigns are kept as individual channels; the remaining 665 campaigns are grouped into an `other` bucket. Five attribution models plus removal effect analysis are compared:
 
 | Channel | First-Touch | Last-Touch | Linear | Time-Decay | **Shapley** | **Removal Eff.** |
 |---------|:-----------:|:----------:|:------:|:----------:|:-----------:|:----------:|
-| Google Paid Search | 17.8% | 16.8% | 17.6% | 16.9% | **16.6%** | **19.4%** |
-| Meta Facebook | 14.6% | 16.0% | 14.3% | 15.8% | **14.0%** | **15.1%** |
-| Google Shopping | 14.2% | 13.1% | 13.6% | 13.3% | **12.4%** | **14.8%** |
-| Meta Instagram | 8.9% | 11.1% | 10.4% | 11.0% | **9.7%** | **6.4%** |
-| Google PMax | 10.1% | 9.1% | 9.0% | 9.2% | **10.0%** | **11.0%** |
-| TikTok Ads | 7.8% | 8.6% | 8.2% | 8.3% | **8.5%** | **9.7%** |
-| Google Display | 7.3% | 6.5% | 6.5% | 6.5% | **7.5%** | **5.9%** |
-| Google Video | 6.2% | 5.6% | 6.7% | 5.6% | **6.5%** | **5.4%** |
-| Organic + Others | 13.2% | 13.2% | 13.7% | 13.4% | **14.8%** | **12.3%** |
+| campaign_10341182 | 4.2% | 5.1% | 4.2% | 5.0% | **4.2%** | **16.9%** |
+| campaign_9100693 | 3.2% | 4.7% | 5.3% | 4.4% | **3.3%** | **19.4%** |
+| campaign_15184511 | 3.3% | 3.2% | 2.7% | 3.2% | **3.2%** | **16.1%** |
+| campaign_30801593 | 3.0% | 3.0% | 3.2% | 2.9% | **2.9%** | **1.1%** |
+| campaign_32368244 | 2.4% | 2.9% | 2.4% | 2.8% | **2.4%** | **13.3%** |
+| campaign_15398570 | 2.2% | 2.2% | 1.7% | 2.2% | **2.3%** | **5.8%** |
+| campaign_29427842 | 1.6% | 1.7% | 1.6% | 1.7% | **1.9%** | **6.5%** |
+| campaign_2869134 | 1.9% | 2.9% | 3.5% | 2.7% | **1.9%** | **12.0%** |
+| campaign_31772643 | 1.2% | 1.1% | 0.8% | 1.1% | **1.3%** | **5.4%** |
+| campaign_28351001 | 1.3% | 1.1% | 0.8% | 1.1% | **1.3%** | **3.5%** |
+| **other** | **75.7%** | **72.0%** | **73.7%** | **73.0%** | **75.5%** | **0.0%** |
+
+> Note: Campaign IDs are anonymized Criteo campaign IDs. `other` aggregates the 665 long-tail campaigns outside the Top 10, so it dominates impressions and conversions.
 
 **Key Findings:**
 
-- **Rule-based models (First/Last/Linear)** produce divergent conclusions. Last-touch systematically overweights final-touch channels (e.g., TikTok), while First-touch overweights acquisition channels.
-- **Shapley Value** provides the most balanced allocation; Google PMax receives 10.0% under Shapley and 11.0% under Removal Effect — both higher than rule-based models, as game-theoretic attribution fairly distributes interaction effects through weighted marginal contributions over all subsets.
-- **Removal Effect** analysis shows trends that align with Shapley values but use a different numerical framework (removal effect is conversion-rate-drop-based, Shapley is combinatorial-game-based), serving as mutual validation.
+- **Rule-based models (First/Last/Linear/Time-Decay)** are highly consistent on real data: because the `other` bucket covers the vast majority of impressions, all rule-based models assign it 72%–76% of attribution credit.
+- **Shapley Value** still provides the most stable allocation on real data. The Top 3 channels (campaign_10341182, campaign_9100693, campaign_15184511) contribute ~11% combined, consistent with rule-based models.
+- **Removal Effect** is insensitive to the `other` bucket (removing `other` leaves almost no sample, driving its share to 0%), but it is highly sensitive to individual top campaigns — campaign_9100693 and campaign_10341182 show removal effects of 19.4% and 16.9%, respectively, indicating they have the largest marginal impact on overall conversion rate.
+- **Methodological insight**: On real data, differences between attribution models are smaller than on simulated data (because the `other` bucket dominates), but Shapley and Removal Effect still effectively identify the highest-impact campaigns.
 
 ### 4. Budget Optimization (`scripts/budget_optimizer.py`)
 
@@ -139,7 +149,8 @@ marketing-attribution-mmm/
 ├── scripts/
 │   ├── preprocess.py              # Polars ETL: nulls, thousand-separator handling, adstock, derived metrics
 │   ├── mmm_model.py               # OLS + Ridge + Lasso, VIF / Durbin-Watson / residual diagnostics
-│   ├── generate_touchpoints.py    # Simulate 50K user journeys based on real channel structure
+│   ├── generate_touchpoints.py    # Simulate 50K user journeys based on real channel structure (fallback)
+│   ├── preprocess_criteo.py       # Aggregate Criteo impression data into user journeys
 │   ├── multi_touch_attribution.py # 6 attribution models: First / Last / Linear / Time-decay / Shapley / Removal Effect
 │   └── budget_optimizer.py        # scipy.optimize SLSQP budget-constrained optimization
 ├── notebooks/
@@ -167,7 +178,7 @@ marketing-attribution-mmm/
 
 | Limitation | Current Approach | Production Path |
 |------------|-----------------|-----------------|
-| User journeys are simulated | Multinomial distribution based on real channel structure; 3.5% conversion rate aligns with industry average | Integrate with CDP (e.g., Segment, Tealium) for real touchpoint sequences |
+| Multi-touch attribution uses real Criteo data, but campaigns are aggregated | Top 10 campaigns + `other` bucket (665 campaigns) to keep Shapley computation tractable | Integrate directly with CDP/Segment/Tealium for complete, unaggregated user journeys; or use more compute to handle all campaigns |
 | MMM is daily granularity | Original daily data provides reasonable temporal resolution | Introduce hour-of-day or daypart features for further refinement |
 | No competitive environment variables | Model assumes constant market share | Incorporate competitor spend data (e.g., Pathmatics, Sensor Tower) |
 | Single-node execution | Local Parquet | Migrate to Snowflake/BigQuery + dbt pipeline orchestration |

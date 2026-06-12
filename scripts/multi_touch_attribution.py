@@ -9,7 +9,6 @@ from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
 
-import numpy as np
 import polars as pl
 
 repo_root = Path(__file__).parents[1].resolve()
@@ -17,17 +16,32 @@ if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
 from config import (
-    IMAGES_DIR,
+    CRITEO_JOURNEYS_PATH,
+    CRITEO_TOUCHPOINTS_PATH,
     MODEL_OUTPUT_DIR,
     SIMULATED_JOURNEYS_PATH,
     SIMULATED_TOUCHPOINTS_PATH,
 )
 
 
-def load_data() -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Load simulated touchpoint and journey data."""
-    tp = pl.read_parquet(SIMULATED_TOUCHPOINTS_PATH)
-    j = pl.read_parquet(SIMULATED_JOURNEYS_PATH)
+def load_data(
+    touchpoints_path: Path | None = None,
+    journeys_path: Path | None = None,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Load touchpoint and journey data.
+
+    Defaults to Criteo real data if available; falls back to simulated data.
+    """
+    tp_path = touchpoints_path or CRITEO_TOUCHPOINTS_PATH
+    j_path = journeys_path or CRITEO_JOURNEYS_PATH
+
+    if not tp_path.exists() or not j_path.exists():
+        print(f"Criteo data not found at {tp_path} / {j_path}; falling back to simulated data.")
+        tp_path = SIMULATED_TOUCHPOINTS_PATH
+        j_path = SIMULATED_JOURNEYS_PATH
+
+    tp = pl.read_parquet(tp_path)
+    j = pl.read_parquet(j_path)
     return tp, j
 
 
@@ -76,7 +90,9 @@ def linear_attribution(tp: pl.DataFrame) -> dict[str, float]:
     return {row["channel"]: row["attributed"] for row in result.iter_rows(named=True)}
 
 
-def time_decay_attribution(tp: pl.DataFrame, journeys: pl.DataFrame, half_life_days: float = 7.0) -> dict[str, float]:
+def time_decay_attribution(
+    tp: pl.DataFrame, journeys: pl.DataFrame, half_life_days: float = 7.0
+) -> dict[str, float]:
     """Attribute more weight to touchpoints closer to conversion.
 
     Each touchpoint receives a share of the journey's total conversion_value,
@@ -90,15 +106,22 @@ def time_decay_attribution(tp: pl.DataFrame, journeys: pl.DataFrame, half_life_d
     conv = tp.filter(pl.col("is_conversion") == 1).select(["user_id", "timestamp"])
     tp = tp.join(conv, on="user_id", suffix="_conv")
 
-    # Compute days to conversion
-    tp = tp.with_columns(
-        (
-            pl.col("timestamp_conv").str.to_datetime(strict=False)
-            - pl.col("timestamp").str.to_datetime(strict=False)
+    # Compute days to conversion.
+    # Simulated data uses ISO datetime strings; Criteo data uses integer seconds.
+    if tp["timestamp"].dtype == pl.Utf8:
+        tp = tp.with_columns(
+            (
+                pl.col("timestamp_conv").str.to_datetime(strict=False)
+                - pl.col("timestamp").str.to_datetime(strict=False)
+            )
+            .dt.total_days()
+            .alias("days_to_conv")
         )
-        .dt.total_days()
-        .alias("days_to_conv")
-    )
+    else:
+        # Assume numeric timestamp (e.g., seconds); convert to days
+        tp = tp.with_columns(
+            ((pl.col("timestamp_conv") - pl.col("timestamp")) / 86_400.0).alias("days_to_conv")
+        )
 
     # Decay weight: 2^(-days/half_life)
     tp = tp.with_columns((2.0 ** (-pl.col("days_to_conv") / half_life_days)).alias("weight"))
@@ -179,8 +202,10 @@ def shapley_attribution(journeys: pl.DataFrame) -> dict[str, float]:
     negative_channels = [(k, v) for k, v in shapley.items() if v < 0]
     if negative_channels:
         names = ", ".join(f"{k} ({v:.2f})" for k, v in negative_channels)
-        print(f"  Warning: {len(negative_channels)} channel(s) had negative Shapley values "
-              f"and were clipped to 0: {names}")
+        print(
+            f"  Warning: {len(negative_channels)} channel(s) had negative Shapley values "
+            f"and were clipped to 0: {names}"
+        )
     # Ensure non-negative
     shapley = {k: max(0.0, v) for k, v in shapley.items()}
 
@@ -249,9 +274,12 @@ def removal_effect_attribution(journeys: pl.DataFrame) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 
-def run_all_models() -> dict:
+def run_all_models(
+    touchpoints_path: Path | None = None,
+    journeys_path: Path | None = None,
+) -> dict:
     """Run all attribution models and return comparison."""
-    tp, journeys = load_data()
+    tp, journeys = load_data(touchpoints_path, journeys_path)
 
     print("Running attribution models...")
 
@@ -296,5 +324,10 @@ def run_all_models() -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=str, default=None)
+    parser.add_argument("--touchpoints", type=str, default=None)
+    parser.add_argument("--journeys", type=str, default=None)
     args = parser.parse_args()
-    run_all_models()
+
+    tp_path = Path(args.touchpoints) if args.touchpoints else None
+    j_path = Path(args.journeys) if args.journeys else None
+    run_all_models(touchpoints_path=tp_path, journeys_path=j_path)

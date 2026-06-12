@@ -1,4 +1,4 @@
-.PHONY: setup preprocess eda mmm attribution optimize dashboard test verify clean
+.PHONY: setup preprocess eda mmm attribution attribution-simulated optimize dashboard test verify clean
 
 # ============================================================
 # Marketing Attribution & Budget Optimization
@@ -17,8 +17,12 @@ mmm:
 	python scripts/mmm_model.py
 
 attribution:
-	python scripts/generate_touchpoints.py
+	python scripts/preprocess_criteo.py
 	python scripts/multi_touch_attribution.py
+
+attribution-simulated:
+	python scripts/generate_touchpoints.py
+	python scripts/multi_touch_attribution.py --touchpoints data/processed/simulated_touchpoints.parquet --journeys data/processed/simulated_journeys.parquet
 
 optimize:
 	python scripts/budget_optimizer.py
@@ -42,7 +46,7 @@ clean:
 # === Quality gates (extended) ===
 
 lint:
-	ruff check scripts/ dashboard/ --ignore E501,F401,E402
+	ruff check scripts/ dashboard/ tests/ --ignore E501,E402,N803,N806
 
 # === Quality gates (extended) ===
 

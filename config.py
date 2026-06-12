@@ -1,6 +1,5 @@
-﻿"""Marketing Attribution & Budget Optimization - Centralized Configuration."""
+"""Marketing Attribution & Budget Optimization - Centralized Configuration."""
 from pathlib import Path
-import os
 
 # ---------------------------------------------------------------------------
 # Project paths
@@ -20,6 +19,11 @@ CLEANED_PARQUET_PATH = PROCESSED_DATA_DIR / "mmm_cleaned.parquet"
 # Simulated touchpoint data
 SIMULATED_TOUCHPOINTS_PATH = PROCESSED_DATA_DIR / "simulated_touchpoints.parquet"
 SIMULATED_JOURNEYS_PATH = PROCESSED_DATA_DIR / "simulated_journeys.parquet"
+
+# Real Criteo attribution data
+CRITEO_RAW_PATH = RAW_DATA_DIR / "criteo_attribution_dataset.tsv.gz"
+CRITEO_TOUCHPOINTS_PATH = PROCESSED_DATA_DIR / "criteo_touchpoints.parquet"
+CRITEO_JOURNEYS_PATH = PROCESSED_DATA_DIR / "criteo_journeys.parquet"
 
 # Output directories
 MODEL_OUTPUT_DIR = PROCESSED_DATA_DIR / "models"

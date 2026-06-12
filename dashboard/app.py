@@ -4,7 +4,6 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import polars as pl

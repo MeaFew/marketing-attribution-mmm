@@ -111,7 +111,7 @@ def main():
         print("No checks configured. Add project-specific checks to main().")
         return
 
-    print(f"\n{'='*40}")
+    print(f"\n{'=' * 40}")
     print(f"Results: {passed}/{total} passed, {failed} failed")
     if failed > 0:
         print("ACTION: Update README.md or pipeline to resolve mismatches.")

@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <h1 align="center">Marketing Attribution & Budget Optimization</h1>
   <p align="center">
     <b>从宏观 MMM 到微观多触点归因的全链路营销效果评估与预算优化系统</b>
@@ -35,7 +35,7 @@ flowchart LR
     A[Raw CSV<br/>132K rows x 50 cols] --> B[Polars ETL]
     B --> C[Parquet]
     C --> D[MMM Modeling<br/>OLS / Ridge / Lasso]
-    C --> E[User Journey<br/>Simulation 50K]
+    C --> E[User Journey<br/>Criteo 16.5M]
     E --> F[6 Attribution Models]
     D --> G[Budget Optimizer<br/>scipy SLSQP]
     F --> G
@@ -59,8 +59,12 @@ flowchart LR
 git clone https://github.com/MeaFew/marketing-attribution-mmm.git
 cd marketing-attribution-mmm
 
-# 下载数据集（GitHub Releases，约 31MB）
+# 1. 下载 MMM 数据集（GitHub Releases，约 31MB）
 bash download_data.sh
+
+# 2.（可选但推荐）下载真实归因数据集 Criteo Attribution Modeling for Bidding Dataset
+#    约 623MB，下载后放到 data/raw/criteo_attribution_dataset.tsv.gz
+#    官方：https://ailab.criteo.com/criteo-attribution-modeling-bidding-dataset/
 
 # 安装依赖并运行
 make setup        # 创建虚拟环境 + 安装依赖
@@ -114,25 +118,30 @@ make verify       # 本地质量门（lint + format + test + audit）
 
 ### 3. 多触点归因（`scripts/multi_touch_attribution.py`）
 
-基于真实渠道结构（Google 5 子渠道、Meta 3 子渠道、TikTok、Organic），生成 50,000 条模拟用户旅程（转化率 3.5%），对比 5 种归因模型 + 移除效应分析：
+使用真实 **Criteo Attribution Modeling for Bidding Dataset**（30 天实时流量，1,650 万条展示，61 万用户，4.5 万次转化）。将 impression 级数据按 `uid` 聚合成用户旅程，取 Top 10 campaigns 作为独立渠道，其余 665 个 campaign 归入 `other` 桶，对比 5 种归因模型 + 移除效应分析：
 
 | 渠道 | First-Touch | Last-Touch | Linear | Time-Decay | **Shapley** | **Removal Eff.** |
 |------|:-----------:|:----------:|:------:|:----------:|:-----------:|:----------:|
-| Google Paid Search | 17.8% | 16.8% | 17.6% | 16.9% | **16.6%** | **19.4%** |
-| Meta Facebook | 14.6% | 16.0% | 14.3% | 15.8% | **14.0%** | **15.1%** |
-| Google Shopping | 14.2% | 13.1% | 13.6% | 13.3% | **12.4%** | **14.8%** |
-| Meta Instagram | 8.9% | 11.1% | 10.4% | 11.0% | **9.7%** | **6.4%** |
-| Google PMax | 10.1% | 9.1% | 9.0% | 9.2% | **10.0%** | **11.0%** |
-| TikTok Ads | 7.8% | 8.6% | 8.2% | 8.3% | **8.5%** | **9.7%** |
-| Google Display | 7.3% | 6.5% | 6.5% | 6.5% | **7.5%** | **5.9%** |
-| Google Video | 6.2% | 5.6% | 6.7% | 5.6% | **6.5%** | **5.4%** |
-| Organic + Others | 13.2% | 13.2% | 13.7% | 13.4% | **14.8%** | **12.3%** |
+| campaign_10341182 | 4.2% | 5.1% | 4.2% | 5.0% | **4.2%** | **16.9%** |
+| campaign_9100693 | 3.2% | 4.7% | 5.3% | 4.4% | **3.3%** | **19.4%** |
+| campaign_15184511 | 3.3% | 3.2% | 2.7% | 3.2% | **3.2%** | **16.1%** |
+| campaign_30801593 | 3.0% | 3.0% | 3.2% | 2.9% | **2.9%** | **1.1%** |
+| campaign_32368244 | 2.4% | 2.9% | 2.4% | 2.8% | **2.4%** | **13.3%** |
+| campaign_15398570 | 2.2% | 2.2% | 1.7% | 2.2% | **2.3%** | **5.8%** |
+| campaign_29427842 | 1.6% | 1.7% | 1.6% | 1.7% | **1.9%** | **6.5%** |
+| campaign_2869134 | 1.9% | 2.9% | 3.5% | 2.7% | **1.9%** | **12.0%** |
+| campaign_31772643 | 1.2% | 1.1% | 0.8% | 1.1% | **1.3%** | **5.4%** |
+| campaign_28351001 | 1.3% | 1.1% | 0.8% | 1.1% | **1.3%** | **3.5%** |
+| **other** | **75.7%** | **72.0%** | **73.7%** | **73.0%** | **75.5%** | **0.0%** |
+
+> 注：campaign ID 为 Criteo 数据中的匿名化广告活动 ID。`other` 聚合了除 Top 10 外的 665 个长尾 campaign，因此占据绝大部分展示与转化。
 
 **关键发现：**
 
-- **规则类模型（First/Last/Linear）**结论差异大，Last-touch 系统性高估末触点渠道（如 TikTok），First-touch 高估获客型渠道。
-- **Shapley Value** 提供了最均衡的分配，Google PMax 在 Shapley 下获得 10.0%、移除效应分析下获得 11.0%，均高于规则类模型——博弈论归因通过所有子集的边际贡献加权，公平分配渠道间的交互效应。
-- **移除效应分析** 强调 Google Paid Search（19.4%）和 TikTok（9.7%），反映移除这些渠道时转化率下降最多——与 Shapley 趋势一致但数值体系不同，两者互为验证。
+- **规则类模型（First/Last/Linear/Time-Decay）**结论高度一致：由于 `other` 桶覆盖了绝大多数展示，各规则模型都将其归因份额排在 72%–76% 之间。
+- **Shapley Value** 在真实数据上仍提供了最稳定的分配，Top 3 渠道（campaign_10341182、campaign_9100693、campaign_15184511）合计贡献约 11%，与规则类模型趋势一致。
+- **移除效应分析（Removal Effect）** 对 `other` 桶不敏感（移除 `other` 后剩余样本极少，导致其份额被压到 0%），但对头部单一 campaign 非常敏感——campaign_9100693 和 campaign_10341182 的移除效应分别达到 19.4% 和 16.9%，说明这两个 campaign 对整体转化率的边际影响最大。
+- **方法启示**：真实数据下归因模型之间的差异比模拟数据更小（因为 `other` 桶占据主导），但 Shapley 与 Removal Effect 仍能有效识别头部高影响 campaign。
 
 ### 4. 预算优化（`scripts/budget_optimizer.py`）
 
@@ -156,7 +165,8 @@ marketing-attribution-mmm/
 ├── scripts/
 │   ├── preprocess.py              # Polars ETL：缺失值、千分位处理、adstock、衍生指标
 │   ├── mmm_model.py               # OLS + Ridge + Lasso，VIF / Durbin-Watson / 残差诊断
-│   ├── generate_touchpoints.py    # 基于真实渠道结构模拟 50K 用户旅程
+│   ├── generate_touchpoints.py    # 基于真实渠道结构模拟 50K 用户旅程（fallback）
+│   ├── preprocess_criteo.py       # 将 Criteo impression 数据聚合为用户旅程
 │   ├── multi_touch_attribution.py # 6 种归因模型：First / Last / Linear / Time-decay / Shapley / Removal Effect
 │   └── budget_optimizer.py        # scipy.optimize SLSQP 预算约束优化
 ├── notebooks/
@@ -184,7 +194,7 @@ marketing-attribution-mmm/
 
 | 局限 | 当前方案 | 生产化路径 |
 |------|---------|-----------|
-| 用户旅程为模拟数据 | 基于真实渠道结构的多项分布生成，转化率 3.5% 与行业均值一致 | 接入 CDP（如 Segment、Tealium）获取真实 touchpoint 序列 |
+| 多触点归因使用 Criteo 真实数据，但 campaign 已聚合 | 取 Top 10 campaigns + `other` 桶（665 个 campaign），便于 Shapley 计算 | 直接接入 CDP/Segment/Tealium 获取完整、未聚合的用户旅程；或使用更多计算资源处理全部 campaign |
 | MMM 为日粒度 | 原始数据的日粒度已提供一定的时间分辨率  | 引入 hour-of-day 或 daypart 特征进一步精细化 |
 | 无竞争环境变量 | 模型假设市场份额不变 | 引入竞品 spend 数据（如 Pathmatics、Sensor Tower） |
 | 单节点执行 | 本地 Parquet | 迁移至 Snowflake/BigQuery + dbt 管线编排 |

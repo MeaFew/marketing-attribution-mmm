@@ -1,9 +1,13 @@
 # Data
 *.csv
+*.tsv
+*.tsv.gz
 *.parquet
 *.db
 *.duckdb
 data/processed/
+data/raw/*.ipynb
+data/raw/README*.md
 
 # Python
 __pycache__/
@@ -39,4 +43,4 @@ models/
 
 # WorkBuddy
 .workbuddy/
-marketing-attribution-mmm/data.zip
+data.zip
